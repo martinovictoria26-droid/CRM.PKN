@@ -1501,23 +1501,17 @@ function jsonpRequest(url, timeoutMs = 10000){
 }
 
 /**
- * Manda el POST con fetch en modo "no-cors". No podemos leer la respuesta
- * (por eso el flujo de guardado siempre recarga los datos después con
- * loadData()), pero a diferencia del truco del iframe, esto no depende de
- * que Google permita "enmarcar" su página — evita el bloqueo que estaba
- * cancelando el guardado.
+ * Manda el guardado como un GET disfrazado (acción + payload en la URL),
+ * usando el mismo mecanismo JSONP que la lectura — que nunca falló en toda
+ * esta conversación. Esto evita por completo los bloqueos de POST/CORS
+ * que Google le pone al truco del iframe y a fetch.
  */
-async function formPostRequest(url, payloadObj){
-  try{
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify(payloadObj),
-    });
-  } catch(err){
-    console.warn('Error de red al guardar:', err);
-  }
-  return true;
+async function sendAction(action, payloadObj){
+  const url = SCRIPT_URL
+    + (SCRIPT_URL.includes('?') ? '&' : '?')
+    + 'action=' + encodeURIComponent(action)
+    + '&payload=' + encodeURIComponent(JSON.stringify(payloadObj));
+  return await jsonpRequest(url);
 }
 
 async function loadData(){
@@ -1553,9 +1547,9 @@ let backendQueue = Promise.resolve();
 async function _postToBackendInner(action, payload){
   if(usingDemoData) return null;
   try{
-    await formPostRequest(SCRIPT_URL, Object.assign({action}, payload), 2200);
+    const result = await sendAction(action, payload);
     await loadData();
-    return true;
+    return result;
   } catch(err){
     console.warn('No se pudo guardar en la planilla:', err);
     updateConnStatus('error', '● No se pudo guardar el último cambio — revisá la conexión');
